@@ -74,6 +74,7 @@ class Reporter:
         self,
         country: str = "cn",
         chart_type: str = "top-free",
+        charts: dict[str, str] | None = None,
     ) -> str | None:
         """生成运营日报（Markdown），并保存到 reports/ 目录。"""
         self._ensure_reports_dir()
@@ -90,6 +91,7 @@ class Reporter:
         rising = self.analyzer.get_rising_stars(country, chart_type, top_n=5)
         new_entries = self.analyzer.get_new_entries(country, chart_type, top_n=5)
         has_yesterday = self.analyzer.has_yesterday_data(country, chart_type)
+        history_days = self.analyzer.get_available_history_days(country, chart_type)
 
         game_count = len(top_apps)
         if game_count < Config.REPORT_LIMIT:
@@ -102,11 +104,45 @@ class Reporter:
             "",
             f"**市场**：{country_label}　**榜单**：{chart_label}",
             "",
-            section_title,
-            "",
-            "| 游戏榜排名 | 总榜排名 | 应用名称 | 开发者 |",
-            "| --- | --- | --- | --- |",
         ]
+
+        if charts and charts.get("trend"):
+            lines.extend(
+                [
+                    f"## 📈 Top {Config.TREND_TOP_N} 排名趋势（近 {min(history_days, Config.TREND_DAYS)} 天）",
+                    "",
+                    f"![排名趋势]({charts['trend']})",
+                    "",
+                ]
+            )
+        elif history_days < 2:
+            lines.extend(
+                [
+                    "## 📈 排名趋势",
+                    "",
+                    "> 历史数据不足 2 天，趋势图将在后续日报中自动生成。",
+                    "",
+                ]
+            )
+
+        if charts and charts.get("developer"):
+            lines.extend(
+                [
+                    "## 🏢 开发者席位占比",
+                    "",
+                    f"![开发者占比]({charts['developer']})",
+                    "",
+                ]
+            )
+
+        lines.extend(
+            [
+                section_title,
+                "",
+                "| 游戏榜排名 | 总榜排名 | 应用名称 | 开发者 |",
+                "| --- | --- | --- | --- |",
+            ]
+        )
 
         for item in top_apps:
             total_rank = self._format_total_rank(item.get("total_rank"))
@@ -119,6 +155,13 @@ class Reporter:
             lines.append("| - | - | 暂无数据 | - |")
 
         lines.extend(["", "## 🔥 上升最快 Top 5", ""])
+        if charts and charts.get("rising"):
+            lines.extend(
+                [
+                    f"![上升最快]({charts['rising']})",
+                    "",
+                ]
+            )
         if not has_yesterday:
             lines.append("> 首次运行，明日将提供趋势分析。")
         elif rising:

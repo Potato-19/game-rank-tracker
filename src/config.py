@@ -6,6 +6,11 @@ class Config:
     FETCH_LIMIT = 200   # 扫描目标深度（Apple RSS 单次实际最多返回 100 条）
     REPORT_LIMIT = 50   # 最终报告展示 50 款游戏
     API_MAX_RESULTS = 100  # App Store RSS 接口单次上限
+    # 图表配置
+    CHARTS_DIR = "reports/charts"
+    TREND_DAYS = 7        # 趋势图回溯天数
+    TREND_TOP_N = 10      # 趋势图追踪 Top N 游戏
+    DEVELOPER_TOP_N = 8   # 开发者占比图展示前 N 名，其余合并为「其他」
     # 游戏类应用分类标识（中/英文及 genreId）
     GAME_CATEGORIES = {'Games', '游戏', '6014'}
     # 相对路径，本地与 GitHub Actions 环境均可正常使用

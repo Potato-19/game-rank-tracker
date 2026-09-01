@@ -218,3 +218,115 @@ class GameAnalyzer:
             )
 
         return new_entries[:top_n]
+
+    def _get_recent_dates(self, days: int) -> list[str]:
+        """返回最近 N 天的日期列表（含今日），按时间升序。"""
+        today = datetime.now(BEIJING_TZ).date()
+        return [
+            (today - timedelta(days=offset)).strftime("%Y-%m-%d")
+            for offset in range(days - 1, -1, -1)
+        ]
+
+    def get_available_history_days(self, country: str, chart_type: str) -> int:
+        """返回指定榜单在库中的历史天数。"""
+        try:
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT COUNT(DISTINCT fetch_date)
+                    FROM daily_rankings
+                    WHERE country = ? AND chart_type = ?
+                    """,
+                    (country, chart_type),
+                )
+                result = cursor.fetchone()
+                return result[0] if result else 0
+        except sqlite3.Error:
+            return 0
+
+    def get_top_apps_rank_history(
+        self,
+        country: str,
+        chart_type: str,
+        days: int | None = None,
+        top_n: int | None = None,
+    ) -> dict | None:
+        """查询今日 Top N 游戏在最近 days 天内的排名走势。"""
+        query_days = days or Config.TREND_DAYS
+        query_top_n = top_n or Config.TREND_TOP_N
+        dates = self._get_recent_dates(query_days)
+        today_top = self.get_today_top(country, chart_type, limit=query_top_n)
+
+        if not today_top:
+            return None
+
+        app_ids = [item["app_id"] for item in today_top]
+        placeholders = ", ".join("?" for _ in app_ids)
+        date_placeholders = ", ".join("?" for _ in dates)
+
+        try:
+            with sqlite3.connect(self.db_manager.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                cursor.execute(
+                    f"""
+                    SELECT dr.app_id, dr.fetch_date, dr.rank, a.app_name
+                    FROM daily_rankings dr
+                    JOIN apps a ON dr.app_id = a.app_id
+                    WHERE dr.country = ? AND dr.chart_type = ?
+                      AND dr.app_id IN ({placeholders})
+                      AND dr.fetch_date IN ({date_placeholders})
+                    ORDER BY dr.fetch_date ASC, dr.rank ASC
+                    """,
+                    (country, chart_type, *app_ids, *dates),
+                )
+                rows = [dict(row) for row in cursor.fetchall()]
+        except sqlite3.Error:
+            return None
+
+        rank_map: dict[tuple[str, str], int] = {}
+        name_map: dict[str, str] = {}
+        for row in rows:
+            rank_map[(row["app_id"], row["fetch_date"])] = row["rank"]
+            name_map[row["app_id"]] = row["app_name"] or "未知应用"
+
+        series: list[dict] = []
+        for app in today_top:
+            app_id = app["app_id"]
+            series.append(
+                {
+                    "app_name": name_map.get(app_id, app["app_name"]),
+                    "ranks": [rank_map.get((app_id, date)) for date in dates],
+                }
+            )
+
+        return {"dates": dates, "series": series}
+
+    def get_developer_share(
+        self,
+        country: str,
+        chart_type: str,
+        limit: int | None = None,
+    ) -> list[dict]:
+        """统计今日 Top N 游戏的开发者席位占比。"""
+        query_limit = limit or Config.REPORT_LIMIT
+        top_apps = self.get_today_top(country, chart_type, limit=query_limit)
+        counts: dict[str, int] = {}
+
+        for app in top_apps:
+            developer = app["developer"] or "未知开发者"
+            counts[developer] = counts.get(developer, 0) + 1
+
+        sorted_counts = sorted(counts.items(), key=lambda item: item[1], reverse=True)
+        top_n = Config.DEVELOPER_TOP_N
+        top_developers = sorted_counts[:top_n]
+        other_count = sum(count for _, count in sorted_counts[top_n:])
+
+        result = [
+            {"developer": developer, "count": count}
+            for developer, count in top_developers
+        ]
+        if other_count:
+            result.append({"developer": "其他", "count": other_count})
+        return result

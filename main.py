@@ -9,6 +9,7 @@ from src.config import Config
 from src.crawler import AppStoreCrawler
 from src.database import DatabaseManager
 from src.reporter import Reporter
+from src.visualizer import ChartGenerator
 
 
 def main() -> None:
@@ -33,14 +34,24 @@ def main() -> None:
     print("\n开始生成运营日报...\n")
     analyzer = GameAnalyzer(db)
     reporter = Reporter(analyzer)
+    chart_generator = ChartGenerator(analyzer)
 
     for country in Config.COUNTRIES:
         for chart_type in Config.CHART_TYPES:
+            rising = analyzer.get_rising_stars(country, chart_type, top_n=5)
+            charts = chart_generator.generate_all(
+                country=country,
+                chart_type=chart_type,
+                rising=rising,
+            )
             filepath = reporter.generate_daily_report(
-                country=country, chart_type=chart_type
+                country=country,
+                chart_type=chart_type,
+                charts=charts,
             )
             if filepath:
-                print(f"✅ 报告已生成: {filepath}")
+                chart_count = len(charts)
+                print(f"✅ 报告已生成: {filepath}（含 {chart_count} 张图表）")
 
 
 if __name__ == "__main__":

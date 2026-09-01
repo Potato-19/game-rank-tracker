@@ -2,6 +2,14 @@
 
 **市场**：中国　**榜单**：畅销游戏榜
 
+## 📈 Top 10 排名趋势（近 3 天）
+
+![排名趋势](charts/2026-09-01_cn_top-grossing_trend.png)
+
+## 🏢 开发者席位占比
+
+![开发者占比](charts/2026-09-01_cn_top-grossing_developer.png)
+
 ## 今日 Top 50
 
 | 游戏榜排名 | 总榜排名 | 应用名称 | 开发者 |
